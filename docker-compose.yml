@@ -1,0 +1,188 @@
+
+version: '3'
+
+services:
+  db:
+     image: bitnami/mysql:8.0.22-debian-10-r6
+     container_name: db
+     restart: always
+     environment:
+  	    MYSQL_ROOT_PASSWORD: password
+  	    MYSQL_DATABASE: db_auth
+  	    MYSQL_USER: admin
+  	    MYSQL_PASSWORD: admin123!
+     ports:
+  	    - "6033:3306"
+     volumes:
+  	    - ./databases:/docker-entrypoint-initdb.d
+        - dbdata:/bitnami/mysql/data
+     networks:
+  	    - ocpizza-network
+
+  config-server:
+     image: config-server
+     container_name: config-server
+     build: 
+        context: ./config-server
+        dockerfile: dockerfile
+      ports:
+  	    - "9101:9101"
+      expose:  	
+  	    - "9101"
+      environment:
+        SPRING_CONFIG_SERVER_URI: https://github.com/vancharlotte/config-server-ocpizza.git
+      networks:
+  	    - ocpizza-network
+
+  eureka-server:
+     depends_on:
+        - config-server
+     image: eureka-server
+     container_name: eureka-server
+     build: 
+        context: ./eureka-server
+        dockerfile: dockerfile
+     ports:
+        - "8761:8761"
+     expose:  	
+        - "8761"
+     environment:
+        SPRING_CONFIG_URI: http://config-server:9101
+        EUREKA_SERVER_URL : http://eureka-server:8761/eureka
+     networks:
+        - ocpizza-network
+
+  authentification:
+     depends_on:
+        - config-server
+        - eureka-server
+        - db
+     image: authentification
+     container_name: authentification
+     restart: always
+     build: 
+        context: ./authentification
+        dockerfile: dockerfile
+     ports:
+        - "9001:9001"
+     expose:  	
+        - "9001"
+     environment:
+        SPRING_CONFIG_URI: http://config-server:9101
+        EUREKA_SERVER_URL : http://eureka-server:8761/eureka
+        SPRING_DATASOURCE_URI : jdbc:mysql://db:3306/dbauth?createDatabaseIfNotExist=true
+     networks:
+        - ocpizza-network
+
+  gestion-commande:
+     depends_on:
+        - config-server
+        - eureka-server
+        - db
+     image: gestion-commande
+     container_name: gestion-commande
+     restart: always
+     build: 
+        context: ./gestion-commande
+        dockerfile: dockerfile
+     ports:
+        - "9002:9002"
+     expose:  	
+        - "9002"
+     environment:
+        SPRING_CONFIG_URI: http://config-server:9101
+        EUREKA_SERVER_URL : http://eureka-server:8761/eureka
+        SPRING_DATASOURCE_URI:dbc:mysql://db:3306/dbcommande?createDatabaseIfNotExist=true
+     networks:
+        - ocpizza-network
+
+  gestion-administration:
+     depends_on:
+        - config-server
+        - eureka-server
+        - db
+     image: gestion-administration
+     container_name: gestion-administration
+     restart: always
+     build: 
+        context: ./gestion-administration
+        dockerfile: dockerfile
+     ports:
+        - "9003:9003"
+     expose:  	
+        - "9003"
+     environment:
+        SPRING_CONFIG_URI: http://config-server:9101
+        EUREKA_SERVER_URL : http://eureka-server:8761/eureka                      
+        SPRING_DATASOURCE_URI:dbc:mysql://db:3306/dbadministration?createDatabaseIfNotExist=true
+     networks:
+        - ocpizza-network
+
+  api-gateway:
+     depends_on:
+        - config-server
+        - eureka-server
+        - authentification
+        - gestion-commande
+        - gestion-administration
+     image: api-gateway
+     container_name: api-gateway
+     restart: always
+     build: 
+        context: ./api-gateway
+        dockerfile: Dockerfile
+     ports:
+        - "9004:9004"
+     expose:  	
+        - "9004"
+     environment:
+        SPRING_CONFIG_URI: http://config-server:9101
+        EUREKA_SERVER_URL : http://eureka-server:8761/eureka
+     networks:
+        - ocpizza-network
+
+  ui-client:
+     depends_on:
+        - config-server
+        - eureka-server
+     image: ui-client
+     container_name: ui-client
+     restart: always
+     build: 
+        context: ./ui-client
+        dockerfile: Dockerfile
+     ports:
+        - "80:8080"
+     expose:  	
+        - "8080"
+     environment:
+        SPRING_CONFIG_URI: http://config-server:9101
+        EUREKA_SERVER_URL : http://eureka-server:8761/eureka
+     networks:
+        - ocpizza-network
+
+  ui-collaborateur:
+     depends_on:
+        - config-server
+        - eureka-server
+     image: ui-collaborateur
+     container_name: ui-collaborateur
+     restart: always
+     build: 
+        context: ./ui-collaborateur
+        dockerfile: Dockerfile
+     ports:
+        - "80:8081"
+     expose:  	
+        - "8081"
+     environment:
+        SPRING_CONFIG_URI: http://config-server:9101
+        EUREKA_SERVER_URL : http://eureka-server:8761/eureka
+     networks:
+        - ocpizza-network
+
+volumes:
+  dbdata:
+
+network:
+  ocpizza-network:
